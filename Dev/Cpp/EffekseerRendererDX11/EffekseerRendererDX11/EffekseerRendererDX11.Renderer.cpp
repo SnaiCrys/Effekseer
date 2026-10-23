@@ -249,9 +249,11 @@ void OriginalState::ReleaseState()
 RendererRef Renderer::Create(::Effekseer::Backend::GraphicsDeviceRef graphicsDevice,
 							 int32_t squareMaxCount,
 							 D3D11_COMPARISON_FUNC depthFunc,
-							 bool isMSAAEnabled)
+							 bool isMSAAEnabled, bool premultipliedAlpha)
 {
 	auto renderer = ::Effekseer::MakeRefPtr<RendererImplemented>(squareMaxCount);
+	// Configure alpha accumulation before the immutable DX11 blend states are created.
+	renderer->GetImpl()->IsPremultipliedAlphaEnabled = premultipliedAlpha;
 	if (renderer->Initialize(graphicsDevice.DownCast<Backend::GraphicsDevice>(), depthFunc, isMSAAEnabled))
 	{
 		return renderer;
@@ -260,10 +262,10 @@ RendererRef Renderer::Create(::Effekseer::Backend::GraphicsDeviceRef graphicsDev
 }
 
 RendererRef Renderer::Create(
-	ID3D11Device* device, ID3D11DeviceContext* context, int32_t squareMaxCount, D3D11_COMPARISON_FUNC depthFunc, bool isMSAAEnabled)
+	ID3D11Device* device, ID3D11DeviceContext* context, int32_t squareMaxCount, D3D11_COMPARISON_FUNC depthFunc, bool isMSAAEnabled, bool premultipliedAlpha)
 {
 	auto graphicsDevice = Effekseer::MakeRefPtr<Backend::GraphicsDevice>(device, context);
-	return Create(graphicsDevice, squareMaxCount, depthFunc, isMSAAEnabled);
+	return Create(graphicsDevice, squareMaxCount, depthFunc, isMSAAEnabled, premultipliedAlpha);
 }
 
 //----------------------------------------------------------------------------------

@@ -69,7 +69,8 @@ public:
 	static RendererRef Create(::Effekseer::Backend::GraphicsDeviceRef graphicsDevice,
 							  int32_t squareMaxCount,
 							  D3D11_COMPARISON_FUNC depthFunc = D3D11_COMPARISON_LESS_EQUAL,
-							  bool isMSAAEnabled = false);
+							  bool isMSAAEnabled = false,
+                              bool premultipliedAlpha = false);
 	/**
 		@brief
 		\~english	Create an instance
@@ -87,7 +88,8 @@ public:
 							  ID3D11DeviceContext* context,
 							  int32_t squareMaxCount,
 							  D3D11_COMPARISON_FUNC depthFunc = D3D11_COMPARISON_LESS_EQUAL,
-							  bool isMSAAEnabled = false);
+							  bool isMSAAEnabled = false,
+                              bool premultipliedAlpha = false);
 
 	virtual ID3D11Device* GetDevice() = 0;
 
