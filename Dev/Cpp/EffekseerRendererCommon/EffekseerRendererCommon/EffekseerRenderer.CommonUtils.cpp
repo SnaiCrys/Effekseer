@@ -1,6 +1,7 @@
 ﻿
 
 #include "EffekseerRenderer.CommonUtils.h"
+#include <cmath>
 
 namespace EffekseerRenderer
 {
@@ -80,6 +81,34 @@ std::array<std::array<float, 4>, 13> ToUniform(const Effekseer::Gradient& gradie
 	return ret;
 }
 
+namespace
+{
+using BillboardVector = ::Effekseer::SIMD::Vec3f;
+
+BillboardVector NormalizeBillboardAxis(const BillboardVector& value, const BillboardVector& fallback)
+{
+	const auto lengthSquared = value.GetSquaredLength();
+	if (!std::isfinite(lengthSquared) || lengthSquared <= 1.e-12f)
+		return fallback;
+	return value * (1.0f / std::sqrt(lengthSquared));
+}
+
+BillboardVector BillboardPerpendicular(const BillboardVector& axis, const BillboardVector& hint)
+{
+	auto perpendicular = BillboardVector::Cross(axis, hint);
+	const auto lengthSquared = perpendicular.GetSquaredLength();
+	if (!std::isfinite(lengthSquared) || lengthSquared <= 1.e-8f)
+	{
+		// Preserve the primary axis at a pole; choose a deterministic nonparallel reference.
+		const auto reference = std::fabs(axis.GetY()) < 0.999f
+							   ? BillboardVector(0.0f, 1.0f, 0.0f)
+							   : BillboardVector(1.0f, 0.0f, 0.0f);
+		perpendicular = BillboardVector::Cross(axis, reference);
+	}
+	return NormalizeBillboardAxis(perpendicular, BillboardVector(0.0f, 0.0f, 1.0f));
+}
+}
+
 void CalcBillboard(::Effekseer::BillboardType billboardType,
 				   Effekseer::SIMD::Mat43f& dst,
 				   ::Effekseer::SIMD::Vec3f& s,
@@ -89,10 +118,9 @@ void CalcBillboard(::Effekseer::BillboardType billboardType,
 				   const ::Effekseer::SIMD::Vec3f& frontDirection,
 				   const ::Effekseer::SIMD::Vec3f& instanceDirection)
 {
-	auto frontDir = frontDirection;
-
 	if (billboardType != ::Effekseer::BillboardType::Fixed)
 	{
+		const auto frontDir = NormalizeBillboardAxis(frontDirection, BillboardVector(0.0f, 0.0f, 1.0f));
 		::Effekseer::SIMD::Mat43f r;
 		::Effekseer::SIMD::Vec3f t;
 		src.GetSRT(s, r, t);
@@ -104,16 +132,16 @@ void CalcBillboard(::Effekseer::BillboardType billboardType,
 			::Effekseer::SIMD::Vec3f Up(0.0f, 1.0f, 0.0f);
 
 			F = frontDir;
-			R = ::Effekseer::SIMD::Vec3f::Cross(Up, F).GetNormal();
-			U = ::Effekseer::SIMD::Vec3f::Cross(F, R).GetNormal();
+			R = -BillboardPerpendicular(F, Up);
+			U = ::Effekseer::SIMD::Vec3f::Cross(F, R);
 		}
 		else if (billboardType == ::Effekseer::BillboardType::RotatedBillboard)
 		{
 			::Effekseer::SIMD::Vec3f Up(0.0f, 1.0f, 0.0f);
 
 			F = frontDir;
-			R = ::Effekseer::SIMD::Vec3f::Cross(Up, F).GetNormal();
-			U = ::Effekseer::SIMD::Vec3f::Cross(F, R).GetNormal();
+			R = -BillboardPerpendicular(F, Up);
+			U = ::Effekseer::SIMD::Vec3f::Cross(F, R);
 
 			float c_zx2 = Effekseer::SIMD::Vec3f::Dot(r.Y, r.Y) - r.Y.GetZ() * r.Y.GetZ();
 			float c_zx = sqrt(std::max(0.0f, c_zx2));
@@ -139,34 +167,17 @@ void CalcBillboard(::Effekseer::BillboardType billboardType,
 		}
 		else if (billboardType == ::Effekseer::BillboardType::YAxisFixed)
 		{
-			U = ::Effekseer::SIMD::Vec3f(r.X.GetY(), r.Y.GetY(), r.Z.GetY());
+			U = NormalizeBillboardAxis(::Effekseer::SIMD::Vec3f(r.X.GetY(), r.Y.GetY(), r.Z.GetY()), BillboardVector(0.0f, 1.0f, 0.0f));
 			F = frontDir;
-			R = ::Effekseer::SIMD::Vec3f::Cross(U, F).GetNormal();
-			F = ::Effekseer::SIMD::Vec3f::Cross(R, U).GetNormal();
+			R = BillboardPerpendicular(U, F);
+			F = ::Effekseer::SIMD::Vec3f::Cross(R, U);
 		}
 		else if (billboardType == ::Effekseer::BillboardType::DirectionalBillboard)
 		{
-			U = instanceDirection;
-			if (instanceDirection.IsZero())
-			{
-				U = Effekseer::SIMD::Vec3f(0.0f, 1.0f, 0.0f);
-			}
-			else
-			{
-				U = U.GetNormal();
-			}
-
+			U = NormalizeBillboardAxis(instanceDirection, BillboardVector(0.0f, 1.0f, 0.0f));
 			F = frontDir;
-			R = ::Effekseer::SIMD::Vec3f::Cross(U, F);
-			if (R.IsZero())
-			{
-				const auto fallbackAxis = fabsf(U.GetY()) < 0.999f
-											  ? Effekseer::SIMD::Vec3f(0.0f, 1.0f, 0.0f)
-											  : Effekseer::SIMD::Vec3f(1.0f, 0.0f, 0.0f);
-				R = ::Effekseer::SIMD::Vec3f::Cross(U, fallbackAxis);
-			}
-			R = R.GetNormal();
-			F = ::Effekseer::SIMD::Vec3f::Cross(R, U).GetNormal();
+			R = BillboardPerpendicular(U, F);
+			F = ::Effekseer::SIMD::Vec3f::Cross(R, U);
 		}
 
 		dst.X = {R.GetX(), U.GetX(), F.GetX(), t.GetX()};
